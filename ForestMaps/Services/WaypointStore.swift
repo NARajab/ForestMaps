@@ -20,6 +20,13 @@ final class WaypointStore: ObservableObject {
         save()
     }
 
+    func addMany(_ imported: [Waypoint]) {
+        guard !imported.isEmpty else { return }
+        waypoints.append(contentsOf: imported)
+        waypoints.sort { $0.createdAt > $1.createdAt }
+        save()
+    }
+
     func update(_ waypoint: Waypoint) {
         guard let index = waypoints.firstIndex(where: { $0.id == waypoint.id }) else { return }
         waypoints[index] = waypoint

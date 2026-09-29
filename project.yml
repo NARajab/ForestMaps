@@ -7,12 +7,19 @@ settings:
   base:
     SWIFT_VERSION: 5.0
     CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: 0.2.0
+    MARKETING_VERSION: 0.3.0
     DEVELOPMENT_TEAM: ""
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.19
+
 targets:
   ForestMaps:
     type: application
     platform: iOS
+    dependencies:
+      - package: ZIPFoundation
     sources:
       - path: ForestMaps
         excludes:
@@ -40,6 +47,11 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - com.adobe.pdf
+          - CFBundleTypeName: KML/KMZ Map Data
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.google.earth.kml
+              - com.google.earth.kmz
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
         UIApplicationSupportsIndirectInputEvents: true
