@@ -70,3 +70,7 @@ GitHub Actions akan menjalankan build lagi secara otomatis.
 ## Tentang file dari GitHub Actions
 
 Workflow saat ini menghasilkan build untuk **iOS Simulator** sebagai pemeriksaan bahwa code dapat dikompilasi. File tersebut bukan IPA yang bisa langsung dipasang di iPhone. Build iPhone membutuhkan Apple code signing. Ini sengaja dipisahkan agar development dari Windows tidak memerlukan certificate di source repository.
+
+## v0.7 background location
+
+Versi 0.7 mengaktifkan background location pada `project.yml`. Build-check simulator tetap dapat dilakukan via GitHub Actions. Untuk menguji background GPS sesungguhnya diperlukan build signed pada iPhone fisik karena simulator/cloud build tidak merepresentasikan perilaku background GPS lapangan secara penuh.

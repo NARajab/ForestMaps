@@ -21,19 +21,53 @@ struct TrackPoint: Codable, Hashable {
     }
 }
 
+struct TrackSurveyMetadata: Codable, Hashable {
+    var petak: String = ""
+    var plot: String = ""
+    var kegiatan: String = ""
+    var notes: String = ""
+
+    var isEmpty: Bool {
+        [petak, plot, kegiatan, notes].allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+}
+
 struct GPSTrack: Identifiable, Codable, Hashable {
     let id: UUID
     var name: String
     let startedAt: Date
     var endedAt: Date?
     var points: [TrackPoint]
+    var survey: TrackSurveyMetadata
 
-    init(id: UUID = UUID(), name: String, startedAt: Date = Date(), endedAt: Date? = nil, points: [TrackPoint] = []) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        startedAt: Date = Date(),
+        endedAt: Date? = nil,
+        points: [TrackPoint] = [],
+        survey: TrackSurveyMetadata = .init()
+    ) {
         self.id = id
         self.name = name
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.points = points
+        self.survey = survey
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, startedAt, endedAt, points, survey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        points = try container.decodeIfPresent([TrackPoint].self, forKey: .points) ?? []
+        survey = try container.decodeIfPresent(TrackSurveyMetadata.self, forKey: .survey) ?? .init()
     }
 
     var duration: TimeInterval {

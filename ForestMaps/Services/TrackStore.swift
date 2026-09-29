@@ -5,23 +5,30 @@ import CoreLocation
 final class TrackStore: ObservableObject {
     @Published private(set) var tracks: [GPSTrack] = []
     @Published private(set) var activeTrack: GPSTrack?
+    @Published private(set) var recoveredActiveTrack = false
     @Published var isRecording = false
 
     private let fileURL: URL
+    private let activeFileURL: URL
     private var lastAcceptedLocation: CLLocation?
 
     init() {
         let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         fileURL = base.appendingPathComponent("gps-tracks.json")
+        activeFileURL = base.appendingPathComponent("active-gps-track.json")
         load()
+        restoreActiveTrack()
     }
 
-    func start(name: String? = nil) {
+    func start(name: String? = nil, survey: TrackSurveyMetadata = .init()) {
         guard !isRecording else { return }
         let fallback = "Track \(Date().formatted(date: .abbreviated, time: .shortened))"
-        activeTrack = GPSTrack(name: (name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? name! : fallback)
+        let cleanName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        activeTrack = GPSTrack(name: cleanName.isEmpty ? fallback : cleanName, survey: survey)
         lastAcceptedLocation = nil
+        recoveredActiveTrack = false
         isRecording = true
+        persistActive()
     }
 
     func append(_ location: CLLocation) {
@@ -37,6 +44,7 @@ final class TrackStore: ObservableObject {
         track.points.append(TrackPoint(location: location))
         activeTrack = track
         lastAcceptedLocation = location
+        persistActive()
     }
 
     func stop(save: Bool = true, name: String? = nil) {
@@ -51,7 +59,17 @@ final class TrackStore: ObservableObject {
         }
         activeTrack = nil
         lastAcceptedLocation = nil
+        recoveredActiveTrack = false
         isRecording = false
+        try? FileManager.default.removeItem(at: activeFileURL)
+    }
+
+    func discardActive() {
+        activeTrack = nil
+        lastAcceptedLocation = nil
+        recoveredActiveTrack = false
+        isRecording = false
+        try? FileManager.default.removeItem(at: activeFileURL)
     }
 
     func delete(at offsets: IndexSet) {
@@ -73,8 +91,31 @@ final class TrackStore: ObservableObject {
         tracks = decoded
     }
 
+    private func restoreActiveTrack() {
+        guard let data = try? Data(contentsOf: activeFileURL),
+              let decoded = try? JSONDecoder().decode(GPSTrack.self, from: data) else { return }
+        activeTrack = decoded
+        isRecording = true
+        recoveredActiveTrack = true
+        if let last = decoded.points.last {
+            lastAcceptedLocation = CLLocation(
+                coordinate: last.coordinate,
+                altitude: last.altitude,
+                horizontalAccuracy: last.horizontalAccuracy,
+                verticalAccuracy: -1,
+                timestamp: last.timestamp
+            )
+        }
+    }
+
     private func persist() {
         guard let data = try? JSONEncoder().encode(tracks) else { return }
         try? data.write(to: fileURL, options: [.atomic])
+    }
+
+    private func persistActive() {
+        guard let activeTrack,
+              let data = try? JSONEncoder().encode(activeTrack) else { return }
+        try? data.write(to: activeFileURL, options: [.atomic])
     }
 }

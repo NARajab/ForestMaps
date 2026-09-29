@@ -19,6 +19,21 @@ struct TracksListView: View {
                         ForEach(trackStore.tracks) { track in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(track.name).font(.headline)
+                                if !track.survey.isEmpty {
+                                    HStack(spacing: 8) {
+                                        if !track.survey.petak.isEmpty { Label(track.survey.petak, systemImage: "square.grid.2x2") }
+                                        if !track.survey.plot.isEmpty { Text(track.survey.plot) }
+                                        if !track.survey.kegiatan.isEmpty { Text(track.survey.kegiatan) }
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                    if !track.survey.notes.isEmpty {
+                                        Text(track.survey.notes)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                }
                                 HStack(spacing: 12) {
                                     Label(formatDistance(track.distanceMeters), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                                     Label(formatDuration(track.duration), systemImage: "clock")

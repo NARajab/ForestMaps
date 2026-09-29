@@ -1,46 +1,45 @@
-# Forest Maps v0.6 — Windows-ready iOS Offline GeoPDF
+# Forest Maps — Windows-ready iOS Offline GeoPDF v0.7
 
-Forest Maps adalah prototype aplikasi iOS native SwiftUI untuk pekerjaan lapangan offline menggunakan GeoPDF, GPS, waypoint, navigasi, KML/KMZ, pengukuran jarak/luas, dan perekaman track GPS.
+Forest Maps adalah prototype aplikasi iOS native SwiftUI untuk membuka GeoPDF secara offline, menampilkan GPS iPhone di atas peta, waypoint, navigasi, KML/KMZ, pengukuran jarak/luas, dan GPS track survey.
 
-## Baru di v0.6 — GPS Track Recorder
+## Baru di v0.7
 
-- Mulai/Stop perekaman track langsung dari layar GeoPDF.
-- Nama track sebelum mulai merekam.
-- Garis track tampil realtime di atas GeoPDF.
-- Jarak tempuh dan durasi tampil selama perekaman.
-- Filter sederhana untuk mengurangi titik GPS buruk/berulang.
-- Track tersimpan lokal/offline di iPhone.
-- Tab **Track** untuk melihat riwayat.
-- Export setiap track ke **KML** agar dapat dibuka kembali di QGIS/Google Earth.
+- **Background GPS tracking**: track dapat tetap direkam saat aplikasi berada di background atau layar iPhone dikunci.
+- Meminta izin lokasi **Always** saat tracking background dibutuhkan.
+- Menampilkan indikator kesiapan background GPS.
+- **Atribut survey track**: Petak, Plot, Kegiatan, dan Catatan.
+- Metadata survey ikut diekspor ke KML melalui `ExtendedData`.
+- Active track disimpan berkala ke file lokal agar data terakhir tidak mudah hilang jika aplikasi terhenti.
+- Active track yang tersimpan dapat dipulihkan saat aplikasi dibuka kembali.
 
-> Catatan: v0.6 merekam saat aplikasi/layar peta aktif. Background GPS penuh akan ditambahkan pada versi lanjutan karena memerlukan capability dan kebijakan penggunaan lokasi tambahan.
-
-## Fitur dari versi sebelumnya
-
-- Import dan simpan GeoPDF offline.
-- Posisi GPS di atas GeoPDF.
-- Waypoint offline, detail Petak/Plot/Catatan, navigasi jarak + bearing.
-- Import/export KML dan KMZ.
-- Marker waypoint interaktif.
-- Ukur jarak dan polygon luas dalam m²/Ha.
+> Catatan iOS: background location tetap tunduk pada kebijakan iOS. Jika pengguna melakukan force-quit aplikasi dari app switcher, iOS dapat menghentikan delivery lokasi sampai aplikasi dibuka kembali.
 
 ## Workflow Windows
 
-1. Edit source di Windows/VS Code.
-2. Commit dan push ke GitHub.
-3. GitHub Actions menjalankan build check pada macOS runner.
-4. Setelah fitur stabil, tambahkan Apple signing/TestFlight untuk instalasi iPhone.
-
-Untuk update repo yang sudah ada:
+1. Extract folder ini dan replace isi project lama.
+2. Dari PowerShell:
 
 ```powershell
 cd F:\ForestMaps_iOS_WindowsReady
 git status
 git add .
-git commit -m "Forest Maps v0.6 GPS track recorder"
+git commit -m "Forest Maps v0.7 background tracking and survey attributes"
 git push origin main
 ```
 
-## Sample map
+3. Buka GitHub → **Actions** → **iOS Build Check**.
+4. Pastikan job **Build Forest Maps on macOS** berstatus `Success`.
 
-Project tetap menyertakan `Peta Upd Agustus 2026.pdf` sebagai sample GeoPDF.
+## Background capability
+
+`project.yml` sudah mengaktifkan:
+
+- `UIBackgroundModes: location`
+- `NSLocationWhenInUseUsageDescription`
+- `NSLocationAlwaysAndWhenInUseUsageDescription`
+
+Ketika nanti project ditandatangani dan dipasang ke iPhone, iOS akan menampilkan permintaan izin lokasi sesuai aturan sistem.
+
+## Sample
+
+Sample bawaan: `Peta Upd Agustus 2026.pdf`.

@@ -7,7 +7,7 @@ settings:
   base:
     SWIFT_VERSION: 5.0
     CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: 0.6.0
+    MARKETING_VERSION: 0.7.0
     DEVELOPMENT_TEAM: ""
 packages:
   ZIPFoundation:
@@ -30,7 +30,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: id.belantarasubur.ForestMaps
         INFOPLIST_KEY_CFBundleDisplayName: Forest Maps
-        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Forest Maps menggunakan lokasi iPhone untuk menampilkan posisi GPS Anda di atas peta offline.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Forest Maps menggunakan lokasi iPhone untuk menampilkan posisi GPS Anda di atas peta offline dan merekam track survey.
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: Forest Maps memerlukan akses lokasi saat aplikasi berada di latar belakang agar track survey tetap direkam ketika layar dikunci atau aplikasi tidak aktif.
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         TARGETED_DEVICE_FAMILY: 1
@@ -55,3 +56,5 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
         UIApplicationSupportsIndirectInputEvents: true
+        UIBackgroundModes:
+          - location

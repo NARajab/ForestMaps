@@ -17,8 +17,7 @@ struct GeoPDFMapView: View {
     @State private var inspectedWaypoint: Waypoint?
     @State private var measurementMode: MeasurementMode = .none
     @State private var measurementPoints: [CLLocationCoordinate2D] = []
-    @State private var showingTrackNamePrompt = false
-    @State private var newTrackName = ""
+    @State private var showingStartTrack = false
 
     private var mapURL: URL { store.url(for: map) }
 
@@ -75,10 +74,9 @@ struct GeoPDFMapView: View {
 
                 Button {
                     if trackStore.isRecording {
-                        trackStore.stop(save: true)
+                        stopTrack()
                     } else {
-                        newTrackName = ""
-                        showingTrackNamePrompt = true
+                        showingStartTrack = true
                     }
                 } label: {
                     Image(systemName: trackStore.isRecording ? "stop.circle.fill" : "record.circle")
@@ -113,19 +111,15 @@ struct GeoPDFMapView: View {
                 onNavigate: { target in selectedWaypoint = target }
             )
         }
-        .onReceive(locationService.$location) { location in
-            guard let location else { return }
-            trackStore.append(location)
-        }
-        .alert("Mulai Track GPS", isPresented: $showingTrackNamePrompt) {
-            TextField("Contoh: Survey PMA Petak 34195", text: $newTrackName)
-            Button("Batal", role: .cancel) {}
-            Button("Mulai") {
-                locationService.requestAndStart()
-                trackStore.start(name: newTrackName)
+        .sheet(isPresented: $showingStartTrack) {
+            StartTrackView { name, survey in
+                startTrack(name: name, survey: survey)
             }
-        } message: {
-            Text("Track direkam dan disimpan secara offline di iPhone.")
+        }
+        .onAppear {
+            if trackStore.isRecording && !locationService.backgroundTrackingEnabled {
+                resumeRecoveredTrackIfNeeded()
+            }
         }
         .alert("GeoPDF", isPresented: Binding(get: { parseError != nil }, set: { if !$0 { parseError = nil } })) {
             Button("OK", role: .cancel) { parseError = nil }
@@ -146,6 +140,15 @@ struct GeoPDFMapView: View {
             }
             if let track = trackStore.activeTrack {
                 Text(track.name).font(.caption.bold())
+                if !track.survey.isEmpty {
+                    HStack(spacing: 8) {
+                        if !track.survey.petak.isEmpty { Text("Petak \(track.survey.petak)") }
+                        if !track.survey.plot.isEmpty { Text(track.survey.plot) }
+                        if !track.survey.kegiatan.isEmpty { Text(track.survey.kegiatan) }
+                    }
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                }
                 HStack {
                     Text("Jarak \(formatDistance(track.distanceMeters))")
                     Spacer()
@@ -153,9 +156,16 @@ struct GeoPDFMapView: View {
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+
+                HStack(spacing: 6) {
+                    Image(systemName: locationService.authorizationStatus == .authorizedAlways ? "lock.open.fill" : "exclamationmark.triangle.fill")
+                    Text(locationService.authorizationStatus == .authorizedAlways ? "Background GPS siap • layar boleh dikunci" : "Izinkan lokasi Always untuk tracking background")
+                }
+                .font(.caption2)
+                .foregroundStyle(locationService.authorizationStatus == .authorizedAlways ? .green : .orange)
             }
             Button(role: .destructive) {
-                trackStore.stop(save: true)
+                stopTrack()
             } label: {
                 Label("Stop & Simpan Track", systemImage: "stop.fill")
                     .frame(maxWidth: .infinity)
@@ -298,6 +308,26 @@ struct GeoPDFMapView: View {
             Button("Stop") { selectedWaypoint = nil }
                 .font(.caption.bold())
         }
+    }
+
+    private func startTrack(name: String, survey: TrackSurveyMetadata) {
+        trackStore.start(name: name, survey: survey)
+        locationService.beginBackgroundTracking { [weak trackStore] location in
+            trackStore?.append(location)
+        }
+        locationService.requestAlwaysAuthorizationIfPossible()
+    }
+
+    private func resumeRecoveredTrackIfNeeded() {
+        guard trackStore.isRecording else { return }
+        locationService.beginBackgroundTracking { [weak trackStore] location in
+            trackStore?.append(location)
+        }
+    }
+
+    private func stopTrack() {
+        trackStore.stop(save: true)
+        locationService.endBackgroundTracking(keepForegroundLocation: true)
     }
 
     private func startMeasurement(_ mode: MeasurementMode) {
