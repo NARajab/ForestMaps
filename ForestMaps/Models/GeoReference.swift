@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreLocation
 
 struct GeoReference: Equatable {
     /// GPTS order from ArcGIS GeoPDF: TL, BL, BR, TR as (lat, lon)
@@ -29,6 +30,20 @@ struct GeoReference: Equatable {
         let x = viewport.xLeft + u * (viewport.xRight - viewport.xLeft)
         let y = viewport.yBottom + v * (viewport.yTop - viewport.yBottom)
         return CGPoint(x: x, y: y)
+    }
+
+    func coordinate(pdfPoint: CGPoint) -> CLLocationCoordinate2D? {
+        let width = viewport.xRight - viewport.xLeft
+        let height = viewport.yTop - viewport.yBottom
+        guard abs(width) > 0.000001, abs(height) > 0.000001 else { return nil }
+
+        let u = (Double(pdfPoint.x) - viewport.xLeft) / width
+        let v = (Double(pdfPoint.y) - viewport.yBottom) / height
+        guard u >= 0, u <= 1, v >= 0, v <= 1 else { return nil }
+
+        let longitude = minLongitude + u * (maxLongitude - minLongitude)
+        let latitude = minLatitude + v * (maxLatitude - minLatitude)
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
 

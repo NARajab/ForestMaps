@@ -14,6 +14,8 @@ struct GeoPDFMapView: View {
     @State private var showingWaypointPicker = false
     @State private var selectedWaypoint: Waypoint?
     @State private var inspectedWaypoint: Waypoint?
+    @State private var measurementMode: MeasurementMode = .none
+    @State private var measurementPoints: [CLLocationCoordinate2D] = []
 
     private var mapURL: URL { store.url(for: map) }
 
@@ -26,19 +28,46 @@ struct GeoPDFMapView: View {
                 waypoints: waypointStore.waypoints,
                 selectedWaypoint: selectedWaypoint,
                 recenterToken: recenterToken,
-                onWaypointTapped: { waypoint in
-                    inspectedWaypoint = waypoint
+                measurementMode: measurementMode,
+                measurementPoints: measurementPoints,
+                onWaypointTapped: { waypoint in inspectedWaypoint = waypoint },
+                onMapCoordinateTapped: { coordinate in
+                    guard measurementMode != .none else { return }
+                    measurementPoints.append(coordinate)
                 }
             )
             .ignoresSafeArea(edges: .bottom)
 
-            statusCard
-                .padding()
+            VStack(spacing: 10) {
+                if measurementMode != .none { measurementCard }
+                statusCard
+            }
+            .padding()
         }
         .navigationTitle(map.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        startMeasurement(.distance)
+                    } label: {
+                        Label("Ukur Jarak", systemImage: "ruler")
+                    }
+                    Button {
+                        startMeasurement(.area)
+                    } label: {
+                        Label("Ukur Luas", systemImage: "square.dashed")
+                    }
+                    if measurementMode != .none {
+                        Divider()
+                        Button("Selesai Mengukur") { measurementMode = .none }
+                        Button("Hapus Titik Ukur", role: .destructive) { measurementPoints.removeAll() }
+                    }
+                } label: {
+                    Image(systemName: measurementMode == .none ? "ruler" : "ruler.fill")
+                }
+
                 Button { locationService.requestAndStart() } label: { Image(systemName: "location.fill") }
                 Button { recenterToken += 1 } label: { Image(systemName: "scope") }
                 Button { if locationService.location != nil { showingAddWaypoint = true } } label: { Image(systemName: "mappin.and.ellipse") }
@@ -64,14 +93,80 @@ struct GeoPDFMapView: View {
             WaypointDetailView(
                 waypoint: waypoint,
                 currentLocation: locationService.location,
-                onNavigate: { target in
-                    selectedWaypoint = target
-                }
+                onNavigate: { target in selectedWaypoint = target }
             )
         }
         .alert("GeoPDF", isPresented: Binding(get: { parseError != nil }, set: { if !$0 { parseError = nil } })) {
             Button("OK", role: .cancel) { parseError = nil }
         } message: { Text(parseError ?? "") }
+    }
+
+    private var measurementCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(
+                    measurementMode == .distance ? "Ukur Jarak" : "Ukur Luas",
+                    systemImage: measurementMode.systemImage
+                )
+                .font(.subheadline.bold())
+                Spacer()
+                Text("\(measurementPoints.count) titik")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Ketuk peta untuk menambah titik ukur.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if measurementMode == .distance {
+                let distance = NavigationMath.polylineDistanceMeters(measurementPoints)
+                HStack {
+                    Text("Total jarak")
+                    Spacer()
+                    Text(formatDistance(distance)).font(.headline.monospacedDigit())
+                }
+            } else {
+                let perimeter = measurementPoints.count >= 2
+                    ? NavigationMath.polylineDistanceMeters(measurementPoints + [measurementPoints[0]])
+                    : 0
+                let area = NavigationMath.polygonAreaSquareMeters(measurementPoints)
+                HStack {
+                    Text("Luas")
+                    Spacer()
+                    Text(formatArea(area)).font(.headline.monospacedDigit())
+                }
+                HStack {
+                    Text("Keliling")
+                    Spacer()
+                    Text(formatDistance(perimeter)).font(.caption.monospacedDigit())
+                }
+            }
+
+            HStack {
+                Button {
+                    if !measurementPoints.isEmpty { measurementPoints.removeLast() }
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(measurementPoints.isEmpty)
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    measurementPoints.removeAll()
+                } label: {
+                    Label("Hapus", systemImage: "trash")
+                }
+                .disabled(measurementPoints.isEmpty)
+
+                Button("Selesai") { measurementMode = .none }
+                    .buttonStyle(.borderedProminent)
+            }
+            .font(.caption.bold())
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     @ViewBuilder
@@ -130,6 +225,22 @@ struct GeoPDFMapView: View {
             Button("Stop") { selectedWaypoint = nil }
                 .font(.caption.bold())
         }
+    }
+
+    private func startMeasurement(_ mode: MeasurementMode) {
+        measurementMode = mode
+        measurementPoints.removeAll()
+    }
+
+    private func formatDistance(_ meters: Double) -> String {
+        meters >= 1000 ? String(format: "%.2f km", meters / 1000) : String(format: "%.1f m", meters)
+    }
+
+    private func formatArea(_ squareMeters: Double) -> String {
+        if squareMeters >= 10_000 {
+            return String(format: "%.2f Ha", squareMeters / 10_000)
+        }
+        return String(format: "%.2f m²", squareMeters)
     }
 
     private func loadGeoReference() {

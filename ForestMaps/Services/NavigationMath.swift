@@ -23,3 +23,35 @@ enum NavigationMath {
         return names[index]
     }
 }
+
+extension NavigationMath {
+    static func polylineDistanceMeters(_ coordinates: [CLLocationCoordinate2D]) -> Double {
+        guard coordinates.count >= 2 else { return 0 }
+        return zip(coordinates, coordinates.dropFirst()).reduce(0) { partial, pair in
+            partial + distanceMeters(from: pair.0, to: pair.1)
+        }
+    }
+
+    /// Area on a local tangent plane. Accurate enough for field polygons spanning a few kilometres.
+    static func polygonAreaSquareMeters(_ coordinates: [CLLocationCoordinate2D]) -> Double {
+        guard coordinates.count >= 3 else { return 0 }
+
+        let earthRadius = 6_378_137.0
+        let originLat = coordinates.map(\.latitude).reduce(0, +) / Double(coordinates.count)
+        let originLon = coordinates.map(\.longitude).reduce(0, +) / Double(coordinates.count)
+        let lat0 = originLat * .pi / 180
+
+        let points: [(x: Double, y: Double)] = coordinates.map { coordinate in
+            let x = (coordinate.longitude - originLon) * .pi / 180 * earthRadius * cos(lat0)
+            let y = (coordinate.latitude - originLat) * .pi / 180 * earthRadius
+            return (x, y)
+        }
+
+        var twiceArea = 0.0
+        for i in points.indices {
+            let j = (i + 1) % points.count
+            twiceArea += points[i].x * points[j].y - points[j].x * points[i].y
+        }
+        return abs(twiceArea) / 2
+    }
+}

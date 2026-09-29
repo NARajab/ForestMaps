@@ -9,10 +9,16 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
     let waypoints: [Waypoint]
     let selectedWaypoint: Waypoint?
     let recenterToken: Int
+    let measurementMode: MeasurementMode
+    let measurementPoints: [CLLocationCoordinate2D]
     let onWaypointTapped: (Waypoint) -> Void
+    let onMapCoordinateTapped: (CLLocationCoordinate2D) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onWaypointTapped: onWaypointTapped)
+        Coordinator(
+            onWaypointTapped: onWaypointTapped,
+            onMapCoordinateTapped: onMapCoordinateTapped
+        )
     }
 
     func makeUIView(context: Context) -> PDFView {
@@ -25,29 +31,45 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
         view.usePageViewController(false)
         context.coordinator.pdfView = view
         context.coordinator.installLocationMarker(on: view)
+        context.coordinator.installMeasurementOverlay(on: view)
+        context.coordinator.installMapTapGesture(on: view)
         return view
     }
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onWaypointTapped = onWaypointTapped
+        context.coordinator.onMapCoordinateTapped = onMapCoordinateTapped
+        context.coordinator.geoReference = geoReference
+        context.coordinator.measurementMode = measurementMode
         context.coordinator.updateLocationMarker(location: location, geo: geoReference)
         context.coordinator.updateWaypointMarkers(waypoints: waypoints, selected: selectedWaypoint, geo: geoReference)
+        context.coordinator.updateMeasurementOverlay(points: measurementPoints, mode: measurementMode, geo: geoReference)
         if context.coordinator.lastRecenterToken != recenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             context.coordinator.centerOnLocationIfPossible()
         }
     }
 
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         weak var pdfView: PDFView?
         private let locationMarker = UIView()
         private var waypointMarkers: [UUID: WaypointMarkerButton] = [:]
+        private var measurementMarkers: [UIView] = []
+        private let measurementLineLayer = CAShapeLayer()
+        private let measurementFillLayer = CAShapeLayer()
         private var locationPointInView: CGPoint?
         var lastRecenterToken = 0
         var onWaypointTapped: (Waypoint) -> Void
+        var onMapCoordinateTapped: (CLLocationCoordinate2D) -> Void
+        var geoReference: GeoReference?
+        var measurementMode: MeasurementMode = .none
 
-        init(onWaypointTapped: @escaping (Waypoint) -> Void) {
+        init(
+            onWaypointTapped: @escaping (Waypoint) -> Void,
+            onMapCoordinateTapped: @escaping (CLLocationCoordinate2D) -> Void
+        ) {
             self.onWaypointTapped = onWaypointTapped
+            self.onMapCoordinateTapped = onMapCoordinateTapped
         }
 
         func installLocationMarker(on view: PDFView) {
@@ -61,6 +83,51 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
             locationMarker.layer.shadowRadius = 5
             locationMarker.isHidden = true
             view.addSubview(locationMarker)
+        }
+
+        func installMeasurementOverlay(on view: PDFView) {
+            measurementFillLayer.fillColor = UIColor.systemYellow.withAlphaComponent(0.20).cgColor
+            measurementFillLayer.strokeColor = UIColor.clear.cgColor
+            view.layer.addSublayer(measurementFillLayer)
+
+            measurementLineLayer.fillColor = UIColor.clear.cgColor
+            measurementLineLayer.strokeColor = UIColor.systemYellow.cgColor
+            measurementLineLayer.lineWidth = 3
+            measurementLineLayer.lineJoin = .round
+            measurementLineLayer.lineCap = .round
+            view.layer.addSublayer(measurementLineLayer)
+        }
+
+        func installMapTapGesture(on view: PDFView) {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(mapTapped(_:)))
+            tap.cancelsTouchesInView = false
+            tap.delegate = self
+            view.addGestureRecognizer(tap)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            if touch.view is UIControl { return false }
+            return measurementMode != .none
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        @objc private func mapTapped(_ recognizer: UITapGestureRecognizer) {
+            guard recognizer.state == .ended,
+                  measurementMode != .none,
+                  let pdfView,
+                  let page = pdfView.document?.page(at: 0),
+                  let geoReference else { return }
+
+            let viewPoint = recognizer.location(in: pdfView)
+            let pdfPoint = pdfView.convert(viewPoint, to: page)
+            guard let coordinate = geoReference.coordinate(pdfPoint: pdfPoint) else { return }
+            onMapCoordinateTapped(coordinate)
         }
 
         func updateLocationMarker(location: CLLocation?, geo: GeoReference?) {
@@ -116,6 +183,51 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
                 pdfView.bringSubviewToFront(marker)
             }
             pdfView.bringSubviewToFront(locationMarker)
+        }
+
+        func updateMeasurementOverlay(points: [CLLocationCoordinate2D], mode: MeasurementMode, geo: GeoReference?) {
+            guard let pdfView, let page = pdfView.document?.page(at: 0), let geo else {
+                clearMeasurementOverlay()
+                return
+            }
+
+            measurementMarkers.forEach { $0.removeFromSuperview() }
+            measurementMarkers.removeAll()
+
+            let viewPoints = points.compactMap { coordinate -> CGPoint? in
+                guard geo.contains(latitude: coordinate.latitude, longitude: coordinate.longitude) else { return nil }
+                return pdfView.convert(geo.pdfPoint(latitude: coordinate.latitude, longitude: coordinate.longitude), from: page)
+            }
+
+            let path = UIBezierPath()
+            if let first = viewPoints.first {
+                path.move(to: first)
+                for point in viewPoints.dropFirst() { path.addLine(to: point) }
+                if mode == .area, viewPoints.count >= 3 { path.close() }
+            }
+            measurementLineLayer.path = path.cgPath
+            measurementFillLayer.path = mode == .area && viewPoints.count >= 3 ? path.cgPath : nil
+
+            for (index, point) in viewPoints.enumerated() {
+                let marker = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 16))
+                marker.center = point
+                marker.backgroundColor = index == 0 ? .systemGreen : .systemYellow
+                marker.layer.cornerRadius = 8
+                marker.layer.borderWidth = 2
+                marker.layer.borderColor = UIColor.white.cgColor
+                marker.isUserInteractionEnabled = false
+                pdfView.addSubview(marker)
+                measurementMarkers.append(marker)
+                pdfView.bringSubviewToFront(marker)
+            }
+            pdfView.bringSubviewToFront(locationMarker)
+        }
+
+        private func clearMeasurementOverlay() {
+            measurementLineLayer.path = nil
+            measurementFillLayer.path = nil
+            measurementMarkers.forEach { $0.removeFromSuperview() }
+            measurementMarkers.removeAll()
         }
 
         private func makeWaypointMarker(for waypoint: Waypoint, on view: PDFView) -> WaypointMarkerButton {
