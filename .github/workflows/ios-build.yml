@@ -1,0 +1,63 @@
+name: iOS Build Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, development ]
+  pull_request:
+    branches: [ main, development ]
+
+jobs:
+  build:
+    name: Build Forest Maps on macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Show available schemes
+        run: xcodebuild -project ForestMaps.xcodeproj -list
+
+      - name: Build for iOS Simulator (no signing required)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ForestMaps.xcodeproj \
+            -scheme ForestMaps \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee build.log
+
+      - name: Package simulator app
+        if: success()
+        run: |
+          APP_PATH=$(find build/DerivedData/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" ForestMaps-Simulator.zip
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForestMaps-build-log
+          path: build.log
+
+      - name: Upload simulator build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForestMaps-Simulator
+          path: ForestMaps-Simulator.zip

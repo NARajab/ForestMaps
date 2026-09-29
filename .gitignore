@@ -1,0 +1,23 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# XcodeGen generated project can be recreated in CI
+ForestMaps.xcodeproj/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Secrets / signing
+*.p12
+*.mobileprovision
+*.cer
+*.key
+.env

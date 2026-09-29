@@ -1,0 +1,14 @@
+Sample: Peta Upd Agustus 2026.pdf
+Creator: Esri ArcMap 10.8.0.12790
+Pages: 1
+Page size: A0
+Detected WKT: WGS_1984_UTM_Zone_50S
+Detected GPTS corners:
+  TL  lat -1.27538  lon 116.43569
+  BL  lat -1.09725  lon 116.43572
+  BR  lat -1.09729  lon 116.69215
+  TR  lat -1.27543  lon 116.69213
+Detected viewport BBox:
+  [69.35955, 2311.52648, 3304.2986, 78.73455]
+
+Note: ArcGIS GPTS order and PDF page orientation can vary. The MVP uses the supplied file's layout pattern and a rectangular interpolation suitable for this map extent.
