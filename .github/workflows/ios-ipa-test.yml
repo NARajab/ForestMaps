@@ -1,0 +1,82 @@
+name: iOS IPA Test Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ForestMaps/**'
+      - 'project.yml'
+      - '.github/workflows/ios-ipa-test.yml'
+
+jobs:
+  ipa:
+    name: Build unsigned IPA for sideload testing
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project ForestMaps.xcodeproj \
+            -scheme ForestMaps
+
+      - name: Build device app without code signing
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ForestMaps.xcodeproj \
+            -scheme ForestMaps \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | tee build-device.log
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP_PATH=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name 'ForestMaps.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "ForestMaps.app was not found"
+            find build/DerivedData/Build/Products -maxdepth 3 -type d -name '*.app' -print || true
+            exit 1
+          fi
+
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/ForestMaps.app
+          /usr/bin/zip -qry ForestMaps-Unsigned.ipa Payload
+
+          echo "Created:"
+          ls -lh ForestMaps-Unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForestMaps-Unsigned-IPA
+          path: ForestMaps-Unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload device build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForestMaps-device-build-log
+          path: build-device.log
+          if-no-files-found: warn
+          retention-days: 14

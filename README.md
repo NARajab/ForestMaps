@@ -43,3 +43,8 @@ Ketika nanti project ditandatangani dan dipasang ke iPhone, iOS akan menampilkan
 ## Sample
 
 Sample bawaan: `Peta Upd Agustus 2026.pdf`.
+
+
+## IPA test build dari Windows
+
+Versi ini menyertakan workflow GitHub Actions **iOS IPA Test Build** yang membuat `ForestMaps-Unsigned.ipa` untuk uji sideload di iPhone. Lihat `docs/IPA_TEST_WINDOWS.md` untuk langkah lengkap.
