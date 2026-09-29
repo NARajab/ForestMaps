@@ -55,3 +55,28 @@ Build iPhone asli membutuhkan Apple code signing. Jadi tahap berikutnya setelah 
 - v0.5: ukur garis/polygon + luas hektar.
 - v0.6: foto geotag + form PMA/Monev.
 - v1.0: offline-first database + sinkronisasi.
+
+## v0.2 — Waypoint & Navigasi Offline
+
+Versi ini menambahkan fungsi lapangan yang tetap berjalan tanpa internet:
+
+- Simpan waypoint dari posisi GPS iPhone saat ini.
+- Field nama titik, Petak, Plot, dan catatan.
+- Waypoint disimpan permanen lokal dalam `Application Support/waypoints.json`.
+- Marker waypoint tampil di atas GeoPDF.
+- Daftar waypoint offline pada tab **Waypoint**.
+- Pilih waypoint sebagai target navigasi.
+- Tampilkan jarak, bearing, arah mata angin, dan panah relatif terhadap heading iPhone.
+- Hapus waypoint dengan swipe.
+
+### Update dari Windows
+
+Setelah mengganti folder project dengan versi ini, jalankan dari PowerShell:
+
+```powershell
+git add .
+git commit -m "Forest Maps v0.2 waypoint and offline navigation"
+git push origin main
+```
+
+Push ke `main` akan memicu workflow GitHub Actions untuk melakukan build check pada macOS.
