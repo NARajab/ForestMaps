@@ -13,6 +13,7 @@ struct GeoPDFMapView: View {
     @State private var showingAddWaypoint = false
     @State private var showingWaypointPicker = false
     @State private var selectedWaypoint: Waypoint?
+    @State private var inspectedWaypoint: Waypoint?
 
     private var mapURL: URL { store.url(for: map) }
 
@@ -24,7 +25,10 @@ struct GeoPDFMapView: View {
                 location: locationService.location,
                 waypoints: waypointStore.waypoints,
                 selectedWaypoint: selectedWaypoint,
-                recenterToken: recenterToken
+                recenterToken: recenterToken,
+                onWaypointTapped: { waypoint in
+                    inspectedWaypoint = waypoint
+                }
             )
             .ignoresSafeArea(edges: .bottom)
 
@@ -55,6 +59,15 @@ struct GeoPDFMapView: View {
                 selectedWaypoint = waypoint
             }
             .environmentObject(waypointStore)
+        }
+        .sheet(item: $inspectedWaypoint) { waypoint in
+            WaypointDetailView(
+                waypoint: waypoint,
+                currentLocation: locationService.location,
+                onNavigate: { target in
+                    selectedWaypoint = target
+                }
+            )
         }
         .alert("GeoPDF", isPresented: Binding(get: { parseError != nil }, set: { if !$0 { parseError = nil } })) {
             Button("OK", role: .cancel) { parseError = nil }
