@@ -5,6 +5,7 @@ struct GeoPDFMapView: View {
     @EnvironmentObject private var store: MapStore
     @EnvironmentObject private var waypointStore: WaypointStore
     @EnvironmentObject private var locationService: LocationService
+    @EnvironmentObject private var trackStore: TrackStore
     let map: OfflineMap
 
     @State private var geo: GeoReference?
@@ -16,6 +17,8 @@ struct GeoPDFMapView: View {
     @State private var inspectedWaypoint: Waypoint?
     @State private var measurementMode: MeasurementMode = .none
     @State private var measurementPoints: [CLLocationCoordinate2D] = []
+    @State private var showingTrackNamePrompt = false
+    @State private var newTrackName = ""
 
     private var mapURL: URL { store.url(for: map) }
 
@@ -30,6 +33,7 @@ struct GeoPDFMapView: View {
                 recenterToken: recenterToken,
                 measurementMode: measurementMode,
                 measurementPoints: measurementPoints,
+                trackPoints: trackStore.activeTrack?.points.map(\.coordinate) ?? [],
                 onWaypointTapped: { waypoint in inspectedWaypoint = waypoint },
                 onMapCoordinateTapped: { coordinate in
                     guard measurementMode != .none else { return }
@@ -39,6 +43,7 @@ struct GeoPDFMapView: View {
             .ignoresSafeArea(edges: .bottom)
 
             VStack(spacing: 10) {
+                if trackStore.isRecording { trackRecordingCard }
                 if measurementMode != .none { measurementCard }
                 statusCard
             }
@@ -68,6 +73,18 @@ struct GeoPDFMapView: View {
                     Image(systemName: measurementMode == .none ? "ruler" : "ruler.fill")
                 }
 
+                Button {
+                    if trackStore.isRecording {
+                        trackStore.stop(save: true)
+                    } else {
+                        newTrackName = ""
+                        showingTrackNamePrompt = true
+                    }
+                } label: {
+                    Image(systemName: trackStore.isRecording ? "stop.circle.fill" : "record.circle")
+                        .foregroundStyle(trackStore.isRecording ? .red : .primary)
+                }
+
                 Button { locationService.requestAndStart() } label: { Image(systemName: "location.fill") }
                 Button { recenterToken += 1 } label: { Image(systemName: "scope") }
                 Button { if locationService.location != nil { showingAddWaypoint = true } } label: { Image(systemName: "mappin.and.ellipse") }
@@ -76,7 +93,7 @@ struct GeoPDFMapView: View {
             }
         }
         .task { loadGeoReference(); locationService.requestAndStart() }
-        .onDisappear { locationService.stop() }
+        .onDisappear { if !trackStore.isRecording { locationService.stop() } }
         .sheet(isPresented: $showingAddWaypoint) {
             if let coordinate = locationService.location?.coordinate {
                 AddWaypointView(coordinate: coordinate)
@@ -96,9 +113,65 @@ struct GeoPDFMapView: View {
                 onNavigate: { target in selectedWaypoint = target }
             )
         }
+        .onReceive(locationService.$location) { location in
+            guard let location else { return }
+            trackStore.append(location)
+        }
+        .alert("Mulai Track GPS", isPresented: $showingTrackNamePrompt) {
+            TextField("Contoh: Survey PMA Petak 34195", text: $newTrackName)
+            Button("Batal", role: .cancel) {}
+            Button("Mulai") {
+                locationService.requestAndStart()
+                trackStore.start(name: newTrackName)
+            }
+        } message: {
+            Text("Track direkam dan disimpan secara offline di iPhone.")
+        }
         .alert("GeoPDF", isPresented: Binding(get: { parseError != nil }, set: { if !$0 { parseError = nil } })) {
             Button("OK", role: .cancel) { parseError = nil }
         } message: { Text(parseError ?? "") }
+    }
+
+    private var trackRecordingCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Merekam Track", systemImage: "record.circle.fill")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.red)
+                Spacer()
+                if let track = trackStore.activeTrack {
+                    Text(formatTrackDuration(track.duration))
+                        .font(.caption.monospacedDigit())
+                }
+            }
+            if let track = trackStore.activeTrack {
+                Text(track.name).font(.caption.bold())
+                HStack {
+                    Text("Jarak \(formatDistance(track.distanceMeters))")
+                    Spacer()
+                    Text("\(track.points.count) titik GPS")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            Button(role: .destructive) {
+                trackStore.stop(save: true)
+            } label: {
+                Label("Stop & Simpan Track", systemImage: "stop.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func formatTrackDuration(_ interval: TimeInterval) -> String {
+        let total = max(0, Int(interval))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, seconds) : String(format: "%02d:%02d", minutes, seconds)
     }
 
     private var measurementCard: some View {

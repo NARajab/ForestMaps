@@ -11,6 +11,7 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
     let recenterToken: Int
     let measurementMode: MeasurementMode
     let measurementPoints: [CLLocationCoordinate2D]
+    let trackPoints: [CLLocationCoordinate2D]
     let onWaypointTapped: (Waypoint) -> Void
     let onMapCoordinateTapped: (CLLocationCoordinate2D) -> Void
 
@@ -32,6 +33,7 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
         context.coordinator.pdfView = view
         context.coordinator.installLocationMarker(on: view)
         context.coordinator.installMeasurementOverlay(on: view)
+        context.coordinator.installTrackOverlay(on: view)
         context.coordinator.installMapTapGesture(on: view)
         return view
     }
@@ -44,6 +46,7 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
         context.coordinator.updateLocationMarker(location: location, geo: geoReference)
         context.coordinator.updateWaypointMarkers(waypoints: waypoints, selected: selectedWaypoint, geo: geoReference)
         context.coordinator.updateMeasurementOverlay(points: measurementPoints, mode: measurementMode, geo: geoReference)
+        context.coordinator.updateTrackOverlay(points: trackPoints, geo: geoReference)
         if context.coordinator.lastRecenterToken != recenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             context.coordinator.centerOnLocationIfPossible()
@@ -57,6 +60,7 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
         private var measurementMarkers: [UIView] = []
         private let measurementLineLayer = CAShapeLayer()
         private let measurementFillLayer = CAShapeLayer()
+        private let trackLineLayer = CAShapeLayer()
         private var locationPointInView: CGPoint?
         var lastRecenterToken = 0
         var onWaypointTapped: (Waypoint) -> Void
@@ -96,6 +100,16 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
             measurementLineLayer.lineJoin = .round
             measurementLineLayer.lineCap = .round
             view.layer.addSublayer(measurementLineLayer)
+        }
+
+
+        func installTrackOverlay(on view: PDFView) {
+            trackLineLayer.fillColor = UIColor.clear.cgColor
+            trackLineLayer.strokeColor = UIColor.systemCyan.cgColor
+            trackLineLayer.lineWidth = 4
+            trackLineLayer.lineJoin = .round
+            trackLineLayer.lineCap = .round
+            view.layer.addSublayer(trackLineLayer)
         }
 
         func installMapTapGesture(on view: PDFView) {
@@ -221,6 +235,24 @@ struct PDFKitMapRepresentable: UIViewRepresentable {
                 pdfView.bringSubviewToFront(marker)
             }
             pdfView.bringSubviewToFront(locationMarker)
+        }
+
+
+        func updateTrackOverlay(points: [CLLocationCoordinate2D], geo: GeoReference?) {
+            guard let pdfView, let page = pdfView.document?.page(at: 0), let geo else {
+                trackLineLayer.path = nil
+                return
+            }
+            let viewPoints = points.compactMap { coordinate -> CGPoint? in
+                guard geo.contains(latitude: coordinate.latitude, longitude: coordinate.longitude) else { return nil }
+                return pdfView.convert(geo.pdfPoint(latitude: coordinate.latitude, longitude: coordinate.longitude), from: page)
+            }
+            let path = UIBezierPath()
+            if let first = viewPoints.first {
+                path.move(to: first)
+                for point in viewPoints.dropFirst() { path.addLine(to: point) }
+            }
+            trackLineLayer.path = path.cgPath
         }
 
         private func clearMeasurementOverlay() {

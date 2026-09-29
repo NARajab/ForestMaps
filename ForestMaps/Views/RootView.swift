@@ -7,6 +7,8 @@ struct RootView: View {
                 .tabItem { Label("Peta", systemImage: "map.fill") }
             WaypointsListView()
                 .tabItem { Label("Waypoint", systemImage: "mappin.and.ellipse") }
+            TracksListView()
+                .tabItem { Label("Track", systemImage: "figure.walk") }
         }
     }
 }
